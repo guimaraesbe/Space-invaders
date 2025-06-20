@@ -4,6 +4,8 @@
 #include <allegro5/allegro_ttf.h>
 #include <allegro5/allegro_primitives.h>
 #include <allegro5/allegro_image.h>
+#include <stdlib.h>
+#include <time.h>
 
 const float FPS = 100;  
 const int SCREEN_W = 960;
@@ -14,12 +16,26 @@ const int GRASS_H = 60;
 const int NAVE_W = 100;
 const int NAVE_H = 50;
 
+const int ALIEN_W = 50;
+const int ALIEN_H = 25;
+
+const int NUM_LINHAS = 4;
+const int NUM_COLUNAS = 5;
+const int ALIENS_SPACE = 30;
+const int ALIENS_TOTAL = NUM_LINHAS * NUM_COLUNAS;
+
 typedef struct Nave {
      float x;
 	 float vel;
 	 int dir, esq;
 	 ALLEGRO_COLOR cor;
 } Nave;
+
+typedef struct Alien {
+    float x, y;
+    float x_vel, y_vel;
+    ALLEGRO_COLOR cor;
+} Alien;
 
 void initNave(Nave *nave) {
 	nave->x =  SCREEN_W / 2;
@@ -29,6 +45,32 @@ void initNave(Nave *nave) {
 	nave-> cor = al_map_rgb(0, 0, 255);
 }
 
+void initAlien (Alien *alien, int col, int linha) {
+    alien->x = col * (ALIEN_W + ALIENS_SPACE);
+    alien->y = linha * (ALIEN_H + ALIENS_SPACE);
+    alien->x_vel = 1;
+    alien->y_vel = ALIEN_H;
+    alien->cor = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
+}
+
+void draw_alien (Alien alien) {
+
+        al_draw_filled_rectangle(alien.x, alien.y, alien.x + ALIEN_W, alien.y + ALIEN_H, alien.cor);
+}
+
+void update_alien (Alien *alien) {
+
+       alien->x += alien->x_vel;
+}
+
+int colisao_alien_solo (Alien alien) {
+
+    if (alien.y + ALIEN_H > SCREEN_H - GRASS_H) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
 
 void draw_scenario() {
 	
@@ -43,10 +85,10 @@ void draw_nave (Nave nave) {
 }
 
 void update_nave (Nave *nave) {
-    if (nave->dir && nave->x + nave->vel <= SCREEN_W) {
+    if (nave->dir && (nave->x + NAVE_W / 2 + nave->vel) <= SCREEN_W) {
        nave->x += nave->vel;
 	}
-	if (nave->esq && nave->x - nave->vel >= 0) {
+	if (nave->esq && (nave->x - NAVE_W / 2 - nave->vel) >= 0) {
 		nave->x -= nave->vel;
 	}
 }
@@ -148,6 +190,14 @@ int main(int argc, char **argv){
 	Nave nave;
 	initNave(&nave);
 
+    srand(time(NULL));
+    Alien aliens[ALIENS_TOTAL];
+       for (int l = 0; l < NUM_LINHAS; l++) {
+           for (int c = 0; c < NUM_COLUNAS; c++) {
+               initAlien(&aliens[l * NUM_COLUNAS + c], c, l);
+           }
+       }
+
 
 	//inicia o temporizador
 	al_start_timer(timer);
@@ -166,8 +216,37 @@ int main(int argc, char **argv){
 			draw_scenario();
 
 			update_nave(&nave);
+
+            for (int i = 0; i < ALIENS_TOTAL; i++) {
+               draw_alien(aliens[i]);
+            }
             
 			draw_nave(nave);
+
+            int deve_descer = 0;
+              for (int i = 0; i < ALIENS_TOTAL; i++) {
+                  if ((aliens[i].x + ALIEN_W + aliens[i].x_vel > SCREEN_W && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
+                      deve_descer = 1;
+                      break;
+                  }
+              }
+              for (int i = 0; i < ALIENS_TOTAL; i++) {
+                  if (deve_descer) {
+                      aliens[i].y += aliens[i].y_vel;
+                      aliens[i].x_vel *= -1;
+                  }
+                  update_alien(&aliens[i]);
+              }
+
+
+            for (int i = 0; i < ALIENS_TOTAL; i++) {
+                if (colisao_alien_solo(aliens[i])) {
+                    playing = 0;
+                    break;
+                }
+            }
+
+
 
 			//atualiza a tela (quando houver algo para mostrar)
 			al_flip_display();
