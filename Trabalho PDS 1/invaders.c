@@ -92,6 +92,23 @@ void update_nave (Nave *nave) {
 		nave->x -= nave->vel;
 	}
 }
+
+void update_all_aliens (Alien aliens [], int total_aliens, int screen_w, int alien_w) {
+    int deve_descer = 0;
+    for (int i = 0; i < total_aliens; i++) {
+        if ((aliens[i].x + alien_w + aliens[i].x_vel > screen_w && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
+            deve_descer = 1;
+            break;
+        }
+    }
+    for (int i = 0; i < total_aliens; i++) {
+        if (deve_descer) {
+            aliens[i].y += aliens[i].y_vel; // Faz o alien descer
+            aliens[i].x_vel *= -1;         // Inverte a direção horizontal
+        }
+        update_alien(&aliens[i]);
+    }
+}
  
 int main(int argc, char **argv){
 	
@@ -217,27 +234,13 @@ int main(int argc, char **argv){
 
 			update_nave(&nave);
 
-            for (int i = 0; i < ALIENS_TOTAL; i++) {
+            update_all_aliens(aliens, ALIENS_TOTAL, SCREEN_W, ALIEN_W);
+
+            for (int i = 0; i < ALIENS_TOTAL; i++) {    //desenha todos os aliens
                draw_alien(aliens[i]);
             }
             
 			draw_nave(nave);
-
-            int deve_descer = 0;
-              for (int i = 0; i < ALIENS_TOTAL; i++) {
-                  if ((aliens[i].x + ALIEN_W + aliens[i].x_vel > SCREEN_W && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
-                      deve_descer = 1;
-                      break;
-                  }
-              }
-              for (int i = 0; i < ALIENS_TOTAL; i++) {
-                  if (deve_descer) {
-                      aliens[i].y += aliens[i].y_vel;
-                      aliens[i].x_vel *= -1;
-                  }
-                  update_alien(&aliens[i]);
-              }
-
 
             for (int i = 0; i < ALIENS_TOTAL; i++) {
                 if (colisao_alien_solo(aliens[i])) {
@@ -245,7 +248,6 @@ int main(int argc, char **argv){
                     break;
                 }
             }
-
 
 
 			//atualiza a tela (quando houver algo para mostrar)
