@@ -24,6 +24,10 @@ const int NUM_COLUNAS = 5;
 const int ALIENS_SPACE = 30;
 const int ALIENS_TOTAL = NUM_LINHAS * NUM_COLUNAS;
 
+const int NUM_TIROS = 5;
+const float TIRO_VEL_Y = 5.0;
+const float TIRO_RAIO = 5.0;
+
 typedef struct Nave {
      float x;
 	 float vel;
@@ -36,6 +40,14 @@ typedef struct Alien {
     float x_vel, y_vel;
     ALLEGRO_COLOR cor;
 } Alien;
+
+typedef struct Tiro {
+    float x, y;
+    float vel_y;
+    float raio;
+    int ativo;
+    ALLEGRO_COLOR cor;
+} Tiro;
 
 void initNave(Nave *nave) {
 	nave->x =  SCREEN_W / 2;
@@ -70,6 +82,25 @@ int colisao_alien_solo (Alien alien) {
     } else {
         return 0;
     }
+}
+
+int colisao_alien_nave (Alien alien, Nave nave) {
+   // dimensoes nave
+    float nave_topo_y = SCREEN_H - GRASS_H / 2 - NAVE_H;
+    float nave_base_y = SCREEN_H - GRASS_H /2;
+    float nave_esq_x = nave.x - NAVE_W / 2;
+    float nave_dir_x = nave.x + NAVE_W / 2;
+    // dimensoes alien
+    float alien_esq_x = alien.x;
+    float alien_dir_x = alien.x + ALIEN_W;
+    float alien_topo_y = alien.y;
+    float alien_base_y = alien.y + ALIEN_H;
+
+    int sobrepoe_x = (alien_esq_x < nave_dir_x && alien_dir_x > nave_esq_x);
+
+    int sobrepoe_y = (alien_topo_y < nave_base_y && alien_base_y > nave_topo_y);
+
+    return sobrepoe_x && sobrepoe_y;
 }
 
 void draw_scenario() {
@@ -107,6 +138,44 @@ void update_all_aliens (Alien aliens [], int total_aliens, int screen_w, int ali
             aliens[i].x_vel *= -1;         // Inverte a direção horizontal
         }
         update_alien(&aliens[i]);
+    }
+}
+
+void initTiros (Tiro tiros[]) {
+    for (int i = 0; i < NUM_TIROS; i++) {
+        tiros[i].ativo = 0;
+    }
+}
+void draw_tiros (Tiro tiros []) {
+    for (int i = 0; i < NUM_TIROS; i++) {
+        if (tiros[i].ativo) {
+            al_draw_filled_circle(tiros[i].x, tiros[i].y, tiros[i].raio, tiros[i].cor);
+        }
+    }
+}
+
+void dispara_tiro (Tiro tiros[], Nave nave) {
+    for (int i = 0; i < NUM_TIROS; i++) {
+        if (!tiros[i].ativo) {
+            tiros[i].x = nave.x;
+            tiros[i].y = SCREEN_H - GRASS_H / 2 - NAVE_H - TIRO_RAIO; // Posiciona acima da nave
+            tiros[i].vel_y = -TIRO_VEL_Y; // Negativo para subir
+            tiros[i].raio = TIRO_RAIO;
+            tiros[i].cor = al_map_rgb(255, 255, 0); 
+            tiros[i].ativo = 1;
+            break; // 
+        }
+     }
+}
+
+void update_tiros (Tiro tiros[]) {
+    for (int i = 0; i < NUM_TIROS; i++) {
+        if (tiros[i].ativo) {
+            tiros[i].y += tiros[i].vel_y;
+            if (tiros[i].y < 0) {
+               tiros[i].ativo = 0;
+            }
+        }
     }
 }
  
@@ -215,6 +284,9 @@ int main(int argc, char **argv){
            }
        }
 
+    Tiro tiros[NUM_TIROS];
+    initTiros(tiros);
+
 
 	//inicia o temporizador
 	al_start_timer(timer);
@@ -236,9 +308,13 @@ int main(int argc, char **argv){
 
             update_all_aliens(aliens, ALIENS_TOTAL, SCREEN_W, ALIEN_W);
 
+            update_tiros(tiros);
+
             for (int i = 0; i < ALIENS_TOTAL; i++) {    //desenha todos os aliens
                draw_alien(aliens[i]);
             }
+
+            draw_tiros(tiros);
             
 			draw_nave(nave);
 
@@ -247,6 +323,9 @@ int main(int argc, char **argv){
                     playing = 0;
                     break;
                 }
+                if (colisao_alien_nave(aliens[i], nave)) {
+                    playing = 0;
+                    break;
             }
 
 
@@ -272,9 +351,13 @@ int main(int argc, char **argv){
 				    nave.esq = 1;
 					break;
 
-					case ALLEGRO_KEY_D:
+				case ALLEGRO_KEY_D:
 				    nave.dir = 1;
 					break;
+
+                case ALLEGRO_KEY_SPACE:
+                    dispara_tiro(tiros, nave);
+                    break;
 			}
 		}
 
