@@ -6,6 +6,8 @@
 #include <allegro5/allegro_image.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
+
 
 const float FPS = 100;  
 const int SCREEN_W = 960;
@@ -24,9 +26,14 @@ const int NUM_COLUNAS = 5;
 const int ALIENS_SPACE = 30;
 const int ALIENS_TOTAL = NUM_LINHAS * NUM_COLUNAS;
 
-const int NUM_TIROS = 5;
+const int NUM_TIROS = 1;
 const float TIRO_VEL_Y = 5.0;
 const float TIRO_RAIO = 5.0;
+
+const float TIRO_POS_INICIAL_Y = SCREEN_H - GRASS_H / 2 - NAVE_H - TIRO_RAIO;
+const int TIRO_INTERVALO_FPS = (int)(TIRO_POS_INICIAL_Y / TIRO_VEL_Y);
+
+const char* RECORD_FILE = "recorde.txt";
 
 typedef struct Nave {
      float x;
@@ -39,6 +46,7 @@ typedef struct Alien {
     float x, y;
     float x_vel, y_vel;
     ALLEGRO_COLOR cor;
+    int ativo;
 } Alien;
 
 typedef struct Tiro {
@@ -63,11 +71,14 @@ void initAlien (Alien *alien, int col, int linha) {
     alien->x_vel = 1;
     alien->y_vel = ALIEN_H;
     alien->cor = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
+    alien->ativo = 1;
 }
 
 void draw_alien (Alien alien) {
 
+     if (alien.ativo) {
         al_draw_filled_rectangle(alien.x, alien.y, alien.x + ALIEN_W, alien.y + ALIEN_H, alien.cor);
+     }
 }
 
 void update_alien (Alien *alien) {
@@ -103,6 +114,42 @@ int colisao_alien_nave (Alien alien, Nave nave) {
     return sobrepoe_x && sobrepoe_y;
 }
 
+int colisao_tiro_alien (Tiro tiro, Alien alien) {
+    if (!tiro.ativo) {
+        return 0;
+    }
+    //centros do tiro
+    float circ_x = tiro.x;
+    float circ_y = tiro.y;
+    float circ_raio = tiro.raio;
+    //dimensoes dos aliens
+    float alien_x1 = alien.x;
+    float alien_y1 = alien.y;
+    float alien_x2 = alien.x + ALIEN_W;
+    float alien_y2 = alien.y + ALIEN_H;
+    //ponto do alien mais proximo do centro do circulo
+    float test_x = circ_x;
+    float test_y = circ_y;
+
+    if (circ_x < alien_x1) {
+        test_x = alien_x1;
+    } else if (circ_x > alien_x2) {
+        test_x = alien_x2;
+    }
+    if (circ_y < alien_y1) {
+        test_y = alien_y1;
+    } else if (circ_y > alien_y2) {
+        test_y = alien_y2;
+    }
+
+        
+    float dist_x = circ_x - test_x;
+    float dist_y = circ_y - test_y;
+    float distance = sqrt((dist_x * dist_x) + (dist_y * dist_y));
+
+    return (distance <= circ_raio);     //distancia menor ou igual ao raio  tem colisao
+}
+
 void draw_scenario() {
 	
 	al_clear_to_color(al_map_rgb(0, 0, 0));
@@ -127,17 +174,19 @@ void update_nave (Nave *nave) {
 void update_all_aliens (Alien aliens [], int total_aliens, int screen_w, int alien_w) {
     int deve_descer = 0;
     for (int i = 0; i < total_aliens; i++) {
-        if ((aliens[i].x + alien_w + aliens[i].x_vel > screen_w && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
+        if (aliens[i].ativo && (aliens[i].x + alien_w + aliens[i].x_vel > screen_w && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
             deve_descer = 1;
             break;
         }
     }
     for (int i = 0; i < total_aliens; i++) {
+        if (aliens[i].ativo) {
         if (deve_descer) {
             aliens[i].y += aliens[i].y_vel; // Faz o alien descer
             aliens[i].x_vel *= -1;         // Inverte a direção horizontal
         }
         update_alien(&aliens[i]);
+        }
     }
 }
 
@@ -178,6 +227,30 @@ void update_tiros (Tiro tiros[]) {
         }
     }
 }
+
+int load_record () {
+    FILE *file = fopen (RECORD_FILE, "r");
+    int record = 0;
+
+    if (file != NULL) {
+        if (fscanf(file, "%d", &record) != 1) {
+            record = 0;
+        }
+        fclose(file);
+    }
+    return record;
+}
+
+void save_record (int newRecord) {
+    FILE *file = fopen(RECORD_FILE, "w");
+    if (file != NULL) {
+        fprintf(file,"%d", newRecord);
+        fclose(file);
+    } else {
+        fprintf(stderr, "Erro ao salvar o recorde no arquivo %s \n", RECORD_FILE);
+    }
+}
+
  
 int main(int argc, char **argv){
 	
@@ -250,7 +323,6 @@ int main(int argc, char **argv){
 		fprintf(stderr, "font file does not exist or cannot be accessed!\n");
 	}
 
-
  	//cria a fila de eventos
 	event_queue = al_create_event_queue();
 	if(!event_queue) {
@@ -259,9 +331,6 @@ int main(int argc, char **argv){
 		return -1;
 	}
    
-
-
-
 
 	//registra na fila os eventos de tela (ex: clicar no X na janela)
 	al_register_event_source(event_queue, al_get_display_event_source(display));
@@ -292,6 +361,10 @@ int main(int argc, char **argv){
 	al_start_timer(timer);
 	
 	int playing = 1;
+    int contador_tiro = 0;
+    int score = 0;
+    int highScore = load_record();
+    
 	while(playing) {
 		ALLEGRO_EVENT ev;
 		//espera por um evento e o armazena na variavel de evento ev
@@ -310,8 +383,33 @@ int main(int argc, char **argv){
 
             update_tiros(tiros);
 
+            al_draw_textf(size_32, al_map_rgb(255, 255, 255), 10, 10, 0, "SCORE: %d", score);
+
+            al_draw_textf(size_32, al_map_rgb(0, 255, 0), SCREEN_W - 10, 10, ALLEGRO_ALIGN_RIGHT, "RECORD: %d", highScore);
+
+            contador_tiro++;
+            if (contador_tiro >= TIRO_INTERVALO_FPS) {
+                dispara_tiro(tiros, nave);
+                contador_tiro = 0;
+            }
+
             for (int i = 0; i < ALIENS_TOTAL; i++) {    //desenha todos os aliens
                draw_alien(aliens[i]);
+            }
+
+            for (int i = 0; i < NUM_TIROS; i++) {
+                if(tiros[i].ativo) {
+                    for (int j = 0; j < ALIENS_TOTAL; j++) {
+                        if (aliens[j].ativo) {
+                            if (colisao_tiro_alien(tiros[i], aliens[j])) {
+                                aliens[j].ativo = 0;
+                                tiros[i].ativo = 0;
+                                score += 25;
+                                break;
+                            }
+                        }
+                    }
+                }
             }
 
             draw_tiros(tiros);
@@ -354,10 +452,6 @@ int main(int argc, char **argv){
 				case ALLEGRO_KEY_D:
 				    nave.dir = 1;
 					break;
-
-                case ALLEGRO_KEY_SPACE:
-                    dispara_tiro(tiros, nave);
-                    break;
 			}
 		}
 
@@ -379,8 +473,17 @@ int main(int argc, char **argv){
 		
 		}
 
-	} //fim do while
-     
+	} //fim do while 
+
+    printf("\nFim de jogo! Seu score final: %d\n", score);
+    if (score > highScore) {
+        highScore = score; // Atualiza o recorde
+        save_record(highScore); // Salva o novo recorde no arquivo
+        printf("NOVO RECORDE: %d!\n", highScore);
+    } else {
+        printf("Recorde atual: %d\n", highScore);
+    }
+    
 	//procedimentos de fim de jogo (fecha a tela, limpa a memoria, etc)
 	
  
