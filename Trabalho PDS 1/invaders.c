@@ -10,13 +10,13 @@
 
 
 const float FPS = 100;  
-const int SCREEN_W = 960;
-const int SCREEN_H = 540;
+const int SCREEN_W = 1500;
+const int SCREEN_H = 790;
 
-const int GRASS_H = 60;
+const int GRASS_H = 100;
 
-const int NAVE_W = 100;
-const int NAVE_H = 50;
+const int NAVE_W = 130;
+const int NAVE_H = 90;
 
 const int ALIEN_W = 50;
 const int ALIEN_H = 25;
@@ -59,16 +59,16 @@ typedef struct Tiro {
 
 void initNave(Nave *nave) {
 	nave->x =  SCREEN_W / 2;
-	nave->vel = 1;
+	nave->vel = 5;
 	nave->dir = 0;
 	nave->esq = 0;
 	nave-> cor = al_map_rgb(0, 0, 255);
 }
 
 void initAlien (Alien *alien, int col, int linha) {
-    alien->x = col * (ALIEN_W + ALIENS_SPACE);
+    alien->x = 100 + col * (ALIEN_W + ALIENS_SPACE);
     alien->y = linha * (ALIEN_H + ALIENS_SPACE);
-    alien->x_vel = 1;
+    alien->x_vel = 5;
     alien->y_vel = ALIEN_H;
     alien->cor = al_map_rgb(rand() % 256, rand() % 256, rand() % 256);
     alien->ativo = 1;
@@ -82,8 +82,7 @@ void draw_alien (Alien alien) {
 }
 
 void update_alien (Alien *alien) {
-
-       alien->x += alien->x_vel;
+	alien->x += alien->x_vel;
 }
 
 int colisao_alien_solo (Alien alien) {
@@ -115,7 +114,7 @@ int colisao_alien_nave (Alien alien, Nave nave) {
 }
 
 int colisao_tiro_alien (Tiro tiro, Alien alien) {
-    if (!tiro.ativo) {
+    if (!tiro.ativo || !alien.ativo) {
         return 0;
     }
     //centros do tiro
@@ -145,9 +144,11 @@ int colisao_tiro_alien (Tiro tiro, Alien alien) {
         
     float dist_x = circ_x - test_x;
     float dist_y = circ_y - test_y;
-    float distance = sqrt((dist_x * dist_x) + (dist_y * dist_y));
+    float distancia_ao_quadrado = (dist_x * dist_x) + (dist_y * dist_y);
 
-    return (distance <= circ_raio);     //distancia menor ou igual ao raio  tem colisao
+	float raio_ao_quadrado = circ_raio * circ_raio;
+
+    return (distancia_ao_quadrado <= raio_ao_quadrado);     //distancia menor ou igual ao raio  tem colisao
 }
 
 void draw_scenario() {
@@ -174,7 +175,7 @@ void update_nave (Nave *nave) {
 void update_all_aliens (Alien aliens [], int total_aliens, int screen_w, int alien_w) {
     int deve_descer = 0;
     for (int i = 0; i < total_aliens; i++) {
-        if (aliens[i].ativo && (aliens[i].x + alien_w + aliens[i].x_vel > screen_w && aliens[i].x_vel > 0) || (aliens[i].x + aliens[i].x_vel < 0 && aliens[i].x_vel < 0)) {
+        if(aliens[i].ativo && (aliens[i].x + alien_w >= screen_w || aliens[i].x  <= 0)){
             deve_descer = 1;
             break;
         }
@@ -318,7 +319,7 @@ int main(int argc, char **argv){
 	}
 	
 	//carrega o arquivo arial.ttf da fonte Arial e define que sera usado o tamanho 32 (segundo parametro)
-    ALLEGRO_FONT *size_32 = al_load_font("arial.ttf", 32, 1);   
+    ALLEGRO_FONT *size_32 = al_load_font("fontes/arial.ttf", 32, 1);   
 	if(size_32 == NULL) {
 		fprintf(stderr, "font file does not exist or cannot be accessed!\n");
 	}
@@ -369,22 +370,19 @@ int main(int argc, char **argv){
 		ALLEGRO_EVENT ev;
 		//espera por um evento e o armazena na variavel de evento ev
 		al_wait_for_event(event_queue, &ev);
+		draw_scenario();
 
 
 		//se o tipo de evento for um evento do temporizador, ou seja, se o tempo passou de t para t+1
 		if(ev.type == ALLEGRO_EVENT_TIMER) {
 
-
-			draw_scenario();
-
-			update_nave(&nave);
-
+            draw_scenario();
+            update_nave(&nave);
+            draw_nave(nave);
+            draw_tiros(tiros);
             update_all_aliens(aliens, ALIENS_TOTAL, SCREEN_W, ALIEN_W);
-
             update_tiros(tiros);
-
             al_draw_textf(size_32, al_map_rgb(255, 255, 255), 10, 10, 0, "SCORE: %d", score);
-
             al_draw_textf(size_32, al_map_rgb(0, 255, 0), SCREEN_W - 10, 10, ALLEGRO_ALIGN_RIGHT, "RECORD: %d", highScore);
 
             contador_tiro++;
@@ -396,6 +394,7 @@ int main(int argc, char **argv){
             for (int i = 0; i < ALIENS_TOTAL; i++) {    //desenha todos os aliens
                draw_alien(aliens[i]);
             }
+
 
             for (int i = 0; i < NUM_TIROS; i++) {
                 if(tiros[i].ativo) {
@@ -411,29 +410,30 @@ int main(int argc, char **argv){
                     }
                 }
             }
-
-            draw_tiros(tiros);
             
-			draw_nave(nave);
+            al_flip_display();
+			
 
             for (int i = 0; i < ALIENS_TOTAL; i++) {
                 if (colisao_alien_solo(aliens[i])) {
                     playing = 0;
                     break;
+                    printf("Alien tocou o solo! Game Over.\n");
                 }
                 if (colisao_alien_nave(aliens[i], nave)) {
                     playing = 0;
                     break;
+                     printf("Alien colidiu com a nave! Game Over.\n");
             }
-
+        }
 
 			//atualiza a tela (quando houver algo para mostrar)
-			al_flip_display();
 			
-			if(al_get_timer_count(timer)%(int)FPS == 0)
+			if(al_get_timer_count(timer)%(int)FPS == 0) {
 				printf("\n%d segundos se passaram...", (int)(al_get_timer_count(timer)/FPS));
-		}
+		
 		//se o tipo de evento for o fechamento da tela (clique no x da janela)
+	    } 
 		else if(ev.type == ALLEGRO_EVENT_DISPLAY_CLOSE) {
 			playing = 0;
 		}
@@ -458,7 +458,7 @@ int main(int argc, char **argv){
 		//se o tipo de evento for um pressionar de uma tecla
 		else if(ev.type == ALLEGRO_EVENT_KEY_UP) {
 			//imprime qual tecla foi
-			printf("\ncodigo tecla: %d", ev.keyboard.keycode);
+			printf("\ncodigo tecla: %d\n", ev.keyboard.keycode);
 
 			switch(ev.keyboard.keycode) {
 				
@@ -474,7 +474,7 @@ int main(int argc, char **argv){
 		}
 
 	} //fim do while 
-
+    }
     printf("\nFim de jogo! Seu score final: %d\n", score);
     if (score > highScore) {
         highScore = score; // Atualiza o recorde
@@ -485,7 +485,7 @@ int main(int argc, char **argv){
     }
     
 	//procedimentos de fim de jogo (fecha a tela, limpa a memoria, etc)
-	
+
  
 	al_destroy_timer(timer);
 	al_destroy_display(display);
